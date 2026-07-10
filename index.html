@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Serendipity Sticker Outliner</title>
+<style>
+  :root {
+    --paper: #FBF7EF; --ink: #2A2622; --ink-soft: #6B6459; --line: #E4DCCB;
+    --panel: #FFFFFF; --accent: #E8663A; --focus: #2A6DF4;
+    --check-a: #EFE9DC; --check-b: #E4DCCB;
+    --radius: 14px; --shadow: 0 1px 2px rgba(42,38,34,.06), 0 6px 20px rgba(42,38,34,.07);
+    font-synthesis: none;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
+    background: var(--paper); color: var(--ink);
+    display: flex; flex-direction: column; overflow: hidden; touch-action: manipulation;
+  }
+  header {
+    display: flex; align-items: baseline; gap: 12px; padding: 14px 20px;
+    border-bottom: 1px solid var(--line); flex: 0 0 auto;
+  }
+  header h1 { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 0; }
+  header h1 .dot { color: var(--accent); }
+  header .tag { font-size: 13px; color: var(--ink-soft); font-weight: 500; }
+  main { flex: 1 1 auto; display: flex; min-height: 0; }
+  .stage {
+    flex: 1 1 auto; position: relative; min-width: 0; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+    background: conic-gradient(var(--check-b) 90deg, var(--check-a) 90deg 180deg, var(--check-b) 180deg 270deg, var(--check-a) 270deg) 0 0 / 24px 24px;
+  }
+  #view { box-shadow: var(--shadow); border-radius: 4px; transform-origin: center; }
+  .empty { text-align: center; color: var(--ink-soft); max-width: 320px; }
+  .empty strong { color: var(--ink); font-weight: 700; display:block; font-size: 17px; margin-bottom: 6px;}
+  .drop { border: 2px dashed var(--line); border-radius: var(--radius); padding: 40px 28px; background: rgba(255,255,255,.5); cursor: pointer; display: block; }
+  .drop input[type=file] {
+    display: block; margin: 16px auto 0; width: 100%; max-width: 240px;
+    font-family: inherit; font-size: 13px; color: var(--ink-soft);
+  }
+  .drop input[type=file]::file-selector-button {
+    font-family: inherit; font-weight: 600; font-size: 13px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff;
+    border-radius: 9px; padding: 8px 14px; margin-right: 10px;
+  }
+  /* zoom controls */
+  .zoom {
+    position: absolute; left: 16px; bottom: 16px; display: flex; gap: 6px;
+    background: #fff; border: 1px solid var(--line); border-radius: 11px; padding: 4px; box-shadow: var(--shadow);
+  }
+  .zoom button {
+    width: 34px; height: 34px; border: none; background: none; font-size: 18px; font-weight: 700;
+    color: var(--ink); cursor: pointer; border-radius: 8px; font-family: inherit;
+  }
+  .zoom button:hover { background: var(--paper); }
+  .zoom .z-level { min-width: 48px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .panel { flex: 0 0 320px; background: var(--panel); border-left: 1px solid var(--line); padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 22px; }
+  .group { display: flex; flex-direction: column; gap: 12px; }
+  .group > .label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .row label { font-size: 14px; font-weight: 500; }
+  .val { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--ink-soft); min-width: 44px; text-align: right; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; background: var(--line); border-radius: 2px; outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); cursor: pointer; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+  input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--focus); }
+  .seg { display: flex; gap: 6px; }
+  .seg button { flex: 1; padding: 8px 4px; font-size: 13px; font-weight: 600; font-family: inherit; border: 1px solid var(--line); background: #fff; color: var(--ink-soft); border-radius: 9px; cursor: pointer; transition: .12s; }
+  .seg button[aria-pressed=true] { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatch { width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(0,0,0,.08); cursor: pointer; padding:0; }
+  .swatch[aria-pressed=true] { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent); }
+  input[type=color] { width: 30px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background:#fff; cursor: pointer; }
+  .check { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; cursor: pointer; }
+  .check input { width: 18px; height: 18px; accent-color: var(--accent); }
+  .actions { display: flex; flex-direction: column; gap: 10px; margin-top: auto; }
+  .btn { padding: 12px; font-size: 15px; font-weight: 700; font-family: inherit; border-radius: 11px; cursor: pointer; border: 1px solid var(--line); background: #fff; color: var(--ink); transition: .12s; }
+  .btn:hover { border-color: var(--ink-soft); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:hover { filter: brightness(1.05); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .hint { font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+  .busy { position:absolute; top:16px; right:16px; font-size:12px; color:var(--ink-soft); background:#fff; padding:6px 12px; border-radius:20px; box-shadow:var(--shadow); opacity:0; transition:.2s; }
+  .busy.on { opacity:1; }
+  @media (max-width: 720px) {
+    main { flex-direction: column; }
+    .panel { flex: 1 1 auto; border-left: none; border-top: 1px solid var(--line); }
+    .stage { flex: 0 0 45vh; }
+  }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Serendipity<span class="dot">.</span></h1>
+  <span class="tag">Sticker Outliner</span>
+</header>
+<main>
+  <div class="stage" id="stage">
+    <div class="empty" id="empty">
+      <label class="drop" id="drop" for="file">
+        <strong>Choose a PNG</strong>
+        Transparent background works best.<br>Tap here to pick from Photos or Files.
+        <input type="file" id="file" accept="image/png,image/jpeg,image/*">
+      </label>
+    </div>
+    <canvas id="view" hidden></canvas>
+    <div class="busy" id="busy">working…</div>
+    <div class="zoom" id="zoom" hidden>
+      <button id="zoomOut" title="Zoom out">–</button>
+      <div class="z-level" id="zLevel">Fit</div>
+      <button id="zoomIn" title="Zoom in">+</button>
+      <button id="zoomFit" title="Fit to screen">⤢</button>
+    </div>
+  </div>
+
+  <aside class="panel" id="panel" hidden>
+    <div class="group">
+      <span class="label">Margin</span>
+      <div class="row"><label for="thick">Thickness</label><span class="val" id="thickVal">16 px</span></div>
+      <input type="range" id="thick" min="0" max="200" value="16">
+      <div class="row"><label for="round">Corner rounding</label><span class="val" id="roundVal">50%</span></div>
+      <input type="range" id="round" min="0" max="100" value="50">
+      <div class="row"><label for="smooth">Edge smoothing</label><span class="val" id="smoothVal">40%</span></div>
+      <input type="range" id="smooth" min="0" max="100" value="40">
+      <p class="hint">Rounding shapes both tight notches and sharp tips. Smoothing dissolves whiskers and fur before the outline is drawn.</p>
+    </div>
+
+    <div class="group">
+      <span class="label">Bleed <span style="font-weight:500;text-transform:none;letter-spacing:0">(for printing)</span></span>
+      <div class="seg" role="group" aria-label="Bleed units">
+        <button id="unitPx" aria-pressed="true">Pixels</button>
+        <button id="unitMm" aria-pressed="false">Millimeters</button>
+      </div>
+      <div class="row"><label for="bleed">Bleed</label><span class="val" id="bleedVal">0 px</span></div>
+      <input type="range" id="bleed" min="0" max="120" value="0">
+      <div class="row" id="dpiRow" hidden><label for="dpi">Print resolution</label><span class="val" id="dpiVal">300 DPI</span></div>
+      <input type="range" id="dpi" min="72" max="600" value="300" step="1" hidden>
+      <div class="row"><label for="bleedDark">Bleed depth</label><span class="val" id="bleedDarkVal">0%</span></div>
+      <input type="range" id="bleedDark" min="0" max="60" value="0">
+      <p class="hint">Bleed stretches each object's own edge colors outward, so a slightly-off cut never shows white. Depth darkens the halo to match hand-painted bleed.</p>
+    </div>
+
+    <div class="group">
+      <span class="label">Background fill</span>
+      <div class="seg" role="group" aria-label="Fill type">
+        <button id="fillColor" aria-pressed="true">Color</button>
+        <button id="fillImage" aria-pressed="false">Image</button>
+      </div>
+      <div class="swatches" id="swatches">
+        <button class="swatch" style="background:#F5E9A8" data-c="#F5E9A8" aria-pressed="true"></button>
+        <button class="swatch" style="background:#ffffff" data-c="#ffffff"></button>
+        <button class="swatch" style="background:#2A2622" data-c="#2A2622"></button>
+        <button class="swatch" style="background:#E8663A" data-c="#E8663A"></button>
+        <button class="swatch" style="background:#8FD0C4" data-c="#8FD0C4"></button>
+        <input type="color" id="custom" value="#F5E9A8" title="Custom color">
+      </div>
+      <input type="file" id="bgfile" accept="image/*" class="sr">
+      <button class="btn" id="pickBg" hidden>Choose background image…</button>
+    </div>
+
+    <div class="group">
+      <span class="label">Cleanup</span>
+      <label class="check"><input type="checkbox" id="holes"> Fill holes inside the sticker</label>
+    </div>
+
+    <div class="actions">
+      <button class="btn primary" id="save" disabled>Save PNG</button>
+      <button class="btn" id="reset">Start over</button>
+    </div>
+  </aside>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const stage=$('#stage'), empty=$('#empty'), fileInput=$('#file');
+const view=$('#view'), ctx=view.getContext('2d'), panel=$('#panel'), busy=$('#busy');
+
+let srcCanvas=null, srcW=0, srcH=0;
+let zoom=1, fitZoom=1;
+const state={ thickness:16, round:50, smooth:40, bleed:0, bleedDark:0, bleedUnit:'px', dpi:300, fillType:'color', color:'#F5E9A8', bgImage:null, fillHoles:false };
+
+// Resolve the bleed distance to full-resolution pixels.
+// In mm mode, convert using DPI: px = mm / 25.4 * dpi.
+function bleedDistancePx(){
+  if(state.bleedUnit==='mm') return (state.bleed/25.4)*state.dpi;
+  return state.bleed;
+}
+
+/* ---------- image loading ---------- */
+function loadImage(file){
+  const img=new Image();
+  img.onload=()=>{
+    srcW=img.naturalWidth; srcH=img.naturalHeight;
+    srcCanvas=document.createElement('canvas'); srcCanvas.width=srcW; srcCanvas.height=srcH;
+    srcCanvas.getContext('2d').drawImage(img,0,0);
+    empty.hidden=true; view.hidden=false; panel.hidden=false; $('#zoom').hidden=false; $('#save').disabled=false;
+    zoom=0; panX=0; panY=0; // signal "fit", centered
+    render();
+  };
+  img.onerror=()=>alert("Couldn't read that image. Try a PNG.");
+  img.src=URL.createObjectURL(file);
+}
+fileInput.addEventListener('change',e=>{ if(e.target.files[0]) loadImage(e.target.files[0]); });
+// The drop zone is a <label for="file">, so tapping it opens the picker natively
+// (the reliable pattern on iOS Safari). We only add drag-and-drop for desktop.
+;['dragover','drop'].forEach(ev=>stage.addEventListener(ev,e=>e.preventDefault()));
+stage.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) loadImage(f); });
+
+/* ---------- Euclidean distance transform (Felzenszwalb, 1D-separable) ---------- *
+ * Exact and fast — replaces the chamfer approximation so edges are smooth,
+ * not stair-stepped. Runs on a Float32 field: 0 where inside, +inf outside.  */
+function edt1d(f,n){
+  const d=new Float32Array(n), v=new Int32Array(n), z=new Float32Array(n+1);
+  let k=0; v[0]=0; z[0]=-1e20; z[1]=1e20;
+  for(let q=1;q<n;q++){
+    let s=((f[q]+q*q)-(f[v[k]]+v[k]*v[k]))/(2*q-2*v[k]);
+    while(s<=z[k]){ k--; s=((f[q]+q*q)-(f[v[k]]+v[k]*v[k]))/(2*q-2*v[k]); }
+    k++; v[k]=q; z[k]=s; z[k+1]=1e20;
+  }
+  k=0;
+  for(let q=0;q<n;q++){ while(z[k+1]<q) k++; const dx=q-v[k]; d[q]=dx*dx+f[v[k]]; }
+  return d;
+}
+function edt(binary,w,h){ // returns distance (in px) to nearest TRUE pixel
+  const INF=1e20, f=new Float32Array(w*h);
+  for(let i=0;i<w*h;i++) f[i]=binary[i]?0:INF;
+  const col=new Float32Array(h);
+  for(let x=0;x<w;x++){ for(let y=0;y<h;y++) col[y]=f[y*w+x]; const d=edt1d(col,h); for(let y=0;y<h;y++) f[y*w+x]=d[y]; }
+  const row=new Float32Array(w);
+  for(let y=0;y<h;y++){ for(let x=0;x<w;x++) row[x]=f[y*w+x]; const d=edt1d(row,w); for(let x=0;x<w;x++) f[y*w+x]=d[x]; }
+  for(let i=0;i<w*h;i++) f[i]=Math.sqrt(f[i]);
+  return f;
+}
+
+/* Nearest-opaque feature transform for BLEED.
+ * For every pixel, find the index of the nearest opaque source pixel, so we
+ * can smear that source's color outward. Brute-force nearest search is too
+ * slow; instead we do a two-pass propagation (like a chamfer sweep) that
+ * carries the best-known source coordinate along with its squared distance.  */
+function nearestOpaque(solid,w,h){
+  const INF=1e15;
+  const best=new Float32Array(w*h).fill(INF);
+  const sx=new Int32Array(w*h).fill(-1);
+  const sy=new Int32Array(w*h).fill(-1);
+  for(let i=0;i<w*h;i++){ if(solid[i]){ best[i]=0; sx[i]=i%w; sy[i]=(i/w)|0; } }
+  const relax=(i,jx,jy)=>{ // try adopting neighbor's source
+    const j=jy*w+jx; if(sx[j]<0) return;
+    const dx=(i%w)-sx[j], dy=((i/w)|0)-sy[j], d=dx*dx+dy*dy;
+    if(d<best[i]){ best[i]=d; sx[i]=sx[j]; sy[i]=sy[j]; }
+  };
+  // forward pass (top-left to bottom-right)
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=y*w+x;
+    if(x>0) relax(i,x-1,y); if(y>0) relax(i,x,y-1);
+    if(x>0&&y>0) relax(i,x-1,y-1); if(x<w-1&&y>0) relax(i,x+1,y-1);
+  }
+  // backward pass (bottom-right to top-left)
+  for(let y=h-1;y>=0;y--) for(let x=w-1;x>=0;x--){ const i=y*w+x;
+    if(x<w-1) relax(i,x+1,y); if(y<h-1) relax(i,x,y+1);
+    if(x<w-1&&y<h-1) relax(i,x+1,y+1); if(x>0&&y<h-1) relax(i,x-1,y+1);
+  }
+  return {sx,sy,dist2:best};
+}
+
+/* gaussian blur (separable, on a Float32 alpha) for edge smoothing */
+function blur(a,w,h,r){
+  if(r<=0) return a;
+  const rad=Math.max(1,Math.round(r)), ker=[]; let sum=0;
+  for(let i=-rad;i<=rad;i++){ const v=Math.exp(-(i*i)/(2*(r/2)*(r/2))); ker.push(v); sum+=v; }
+  for(let i=0;i<ker.length;i++) ker[i]/=sum;
+  const tmp=new Float32Array(w*h), out=new Float32Array(w*h);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ let s=0; for(let k=-rad;k<=rad;k++){ const xx=Math.min(w-1,Math.max(0,x+k)); s+=a[y*w+xx]*ker[k+rad]; } tmp[y*w+x]=s; }
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ let s=0; for(let k=-rad;k<=rad;k++){ const yy=Math.min(h-1,Math.max(0,y+k)); s+=tmp[yy*w+x]*ker[k+rad]; } out[y*w+x]=s; }
+  return out;
+}
+
+function fillHolesOn(mask,w,h){ // mask: Uint8 (1 solid). Fills enclosed transparent pockets.
+  const outside=new Uint8Array(w*h), st=[];
+  const push=i=>{ if(!outside[i]&&!mask[i]){ outside[i]=1; st.push(i);} };
+  for(let x=0;x<w;x++){ push(x); push((h-1)*w+x);} for(let y=0;y<h;y++){ push(y*w); push(y*w+w-1);}
+  while(st.length){ const i=st.pop(), x=i%w, y=(i/w)|0; if(x>0)push(i-1); if(x<w-1)push(i+1); if(y>0)push(i-w); if(y<h-1)push(i+w); }
+  const out=new Uint8Array(w*h);
+  for(let i=0;i<w*h;i++) out[i]= mask[i]||!outside[i] ?1:0;
+  return out;
+}
+
+/* ---------- performance: work on a downscaled copy for preview ---------- */
+function buildSilhouette(alpha,w,h,scale){
+  // downscale alpha for speed if needed
+  let aw=w, ah=h, a=alpha;
+  if(scale<1){
+    aw=Math.max(1,Math.round(w*scale)); ah=Math.max(1,Math.round(h*scale));
+    const c1=document.createElement('canvas'); c1.width=w; c1.height=h;
+    const id=ctx.createImageData(w,h); for(let i=0;i<w*h;i++) id.data[i*4+3]=alpha[i];
+    c1.getContext('2d').putImageData(id,0,0);
+    const c2=document.createElement('canvas'); c2.width=aw; c2.height=ah;
+    const x2=c2.getContext('2d'); x2.imageSmoothingEnabled=true; x2.drawImage(c1,0,0,aw,ah);
+    const d=x2.getImageData(0,0,aw,ah).data; a=new Float32Array(aw*ah);
+    for(let i=0;i<aw*ah;i++) a[i]=d[i*4+3];
+  } else { a=Float32Array.from(alpha); }
+
+  const s=scale; // parameters scale with the working resolution
+  const t=state.thickness*s;
+  // cap rounding so a huge close-radius can't bridge adjacent features (e.g. ear+head)
+  // and make one tip balloon. Half the thickness is a safe geometric ceiling.
+  const roundMax=Math.max(4*s, t*0.5 + 6*s);
+  const roundPx=Math.min((state.round/100)*Math.max(t,8*s), roundMax);
+  const smoothPx=(state.smooth/100)*12*s;
+
+  // 1) edge smoothing: blur alpha, then threshold
+  let sm=blur(a,aw,ah,smoothPx);
+  let bin=new Uint8Array(aw*ah);
+  for(let i=0;i<aw*ah;i++) bin[i]= sm[i]>127?1:0;
+
+  // 2) grow by thickness (binary for the morphology steps)
+  let dOut=edt(bin,aw,ah); // dist to nearest solid
+  let grown=new Uint8Array(aw*ah);
+  for(let i=0;i<aw*ah;i++) grown[i]= dOut[i]<=t ?1:0;
+
+  // 3) round the silhouette: CLOSE (rounds concave notches) then OPEN (rounds convex tips)
+  if(roundPx>0){
+    let dToSolid=edt(grown,aw,ah);
+    let dil=new Uint8Array(aw*ah);
+    for(let i=0;i<aw*ah;i++) dil[i]= dToSolid[i]<=roundPx?1:0;
+    let inv=new Uint8Array(aw*ah); for(let i=0;i<aw*ah;i++) inv[i]=dil[i]?0:1;
+    let dToHole=edt(inv,aw,ah);
+    let closed=new Uint8Array(aw*ah);
+    for(let i=0;i<aw*ah;i++) closed[i]= dToHole[i]>roundPx?1:0;
+    let invC=new Uint8Array(aw*ah); for(let i=0;i<aw*ah;i++) invC[i]=closed[i]?0:1;
+    let dToOut=edt(invC,aw,ah);
+    let eroded=new Uint8Array(aw*ah);
+    for(let i=0;i<aw*ah;i++) eroded[i]= dToOut[i]>roundPx?1:0;
+    let dToEro=edt(eroded,aw,ah);
+    grown=new Uint8Array(aw*ah);
+    for(let i=0;i<aw*ah;i++) grown[i]= dToEro[i]<=roundPx?1:0;
+  }
+
+  // 4) fill holes on the grown silhouette
+  if(state.fillHoles) grown=fillHolesOn(grown,aw,ah);
+
+  // 5) ANTIALIAS: convert the final binary silhouette into soft coverage.
+  //    A signed distance field with a ~1px linear ramp gives smooth edges
+  //    that survive upscaling — this is what kills the stair-stepping.
+  const dIn=edt(grown,aw,ah);                                   // dist from outside (0 outside)
+  const inv2=new Uint8Array(aw*ah); for(let i=0;i<aw*ah;i++) inv2[i]=grown[i]?0:1;
+  const dOut2=edt(inv2,aw,ah);                                  // dist from inside (0 inside)
+  // Feather width scales with the upscale factor: a sub-pixel ramp in the FINAL
+  // image needs ~1/scale px here, or the antialiasing vanishes on upscale.
+  // Tuned down to keep the edge crisp rather than fuzzy in the preview.
+  const feather=Math.max(0.6, 0.45/scale);
+  const cov=new Uint8ClampedArray(aw*ah);
+  for(let i=0;i<aw*ah;i++){
+    const signed = grown[i] ? -dOut2[i] : dIn[i];               // <0 inside, >0 outside
+    cov[i] = Math.round(255 * Math.min(1, Math.max(0, (feather - signed)/(2*feather))));
+  }
+  return {mask:cov, aw, ah};
+}
+
+/* ---------- render ---------- */
+let renderTimer=null, pending=false;
+function scheduleRender(){ // debounce heavy work while dragging
+  if(renderTimer) { pending=true; return; }
+  render();
+  renderTimer=setTimeout(()=>{ renderTimer=null; if(pending){ pending=false; scheduleRender(); } },40);
+}
+
+// Compose the sticker onto a target canvas at a given working scale.
+// scale<1 => fast preview; scale=1 => full-resolution (used for Save).
+function compose(target, scale){
+  const w=srcW, h=srcH;
+  const src=srcCanvas.getContext('2d').getImageData(0,0,w,h);
+  const alpha=new Uint8ClampedArray(w*h);
+  for(let i=0;i<w*h;i++) alpha[i]=src.data[i*4+3];
+
+  const {mask,aw,ah}=buildSilhouette(alpha,w,h,scale);
+
+  // put the soft-coverage mask on its own canvas (alpha = coverage 0..255)
+  const mc=document.createElement('canvas'); mc.width=aw; mc.height=ah;
+  const mctx=mc.getContext('2d'); const mid=mctx.createImageData(aw,ah);
+  for(let i=0;i<aw*ah;i++){ mid.data[i*4+3]=mask[i]; } // soft, not 0/255
+  mctx.putImageData(mid,0,0);
+
+  const tctx=target.getContext('2d');
+  target.width=w; target.height=h; tctx.clearRect(0,0,w,h);
+
+  // fill layer (background: color or image), masked to the silhouette
+  const layer=document.createElement('canvas'); layer.width=w; layer.height=h;
+  const lctx=layer.getContext('2d');
+  if(state.fillType==='image' && state.bgImage){
+    const bg=state.bgImage, sc=Math.max(w/bg.width,h/bg.height);
+    lctx.drawImage(bg,(w-bg.width*sc)/2,(h-bg.height*sc)/2,bg.width*sc,bg.height*sc);
+  } else { lctx.fillStyle=state.color; lctx.fillRect(0,0,w,h); }
+  lctx.globalCompositeOperation='destination-in';
+  lctx.imageSmoothingEnabled=true; lctx.imageSmoothingQuality='high';
+  lctx.drawImage(mc,0,0,w,h);           // smooth upscale of soft mask -> AA edges
+  tctx.drawImage(layer,0,0);
+
+  // BLEED: smear each object's own edge colors outward AND slightly inward,
+  // painted UNDER the art. Inward fill plugs the anti-aliased fringe so there's
+  // no transparent seam between art and bleed; the crisp art paints on top.
+  if(state.bleed>0){
+    const bleedPx=bleedDistancePx();       // resolves mm->px via DPI, or raw px
+    const bw=aw, bh=ah, bscale=aw/w;
+    const wc=document.createElement('canvas'); wc.width=w; wc.height=h;
+    wc.getContext('2d').drawImage(srcCanvas,0,0);
+    const dc=document.createElement('canvas'); dc.width=bw; dc.height=bh;
+    const dx=dc.getContext('2d'); dx.imageSmoothingEnabled=true; dx.drawImage(wc,0,0,bw,bh);
+    const wd=dx.getImageData(0,0,bw,bh); const wdat=wd.data;
+    // threshold at ~50% so the smear starts at the TRUE edge, not inside the AA fringe
+    const solid=new Uint8Array(bw*bh);
+    for(let i=0;i<bw*bh;i++) solid[i]= wdat[i*4+3]>128 ?1:0;
+    const {sx,sy,dist2}=nearestOpaque(solid,bw,bh);
+    const bleedW=bleedPx*bscale;
+    const inwardW=Math.max(1.5, 2.5*bscale); // small overlap tucked under the art
+    const dark=state.bleedDark/100;
+    const bleedImg=dx.createImageData(bw,bh); const bd=bleedImg.data;
+    for(let i=0;i<bw*bh;i++){
+      const d=Math.sqrt(dist2[i]);
+      const si= sx[i]>=0 ? (sy[i]*bw+sx[i])*4 : -1;
+      if(si<0) continue;
+      let paint=false, ramp=0;
+      if(!solid[i]){                       // OUTWARD ring
+        if(d>0 && d<=bleedW){ paint=true; ramp=Math.min(1, d/bleedW); }
+      } else if(wdat[i*4+3]<250){           // INWARD: only under semi-transparent fringe
+        paint=true; ramp=0;                 // full-strength color, art composites over it
+      }
+      if(paint){
+        const f=1 - dark*ramp;
+        bd[i*4]  = wdat[si]*f;
+        bd[i*4+1]= wdat[si+1]*f;
+        bd[i*4+2]= wdat[si+2]*f;
+        bd[i*4+3]= 255;
+      }
+    }
+    const bc=document.createElement('canvas'); bc.width=bw; bc.height=bh;
+    bc.getContext('2d').putImageData(bleedImg,0,0);
+    tctx.imageSmoothingEnabled=true; tctx.imageSmoothingQuality='high';
+    tctx.drawImage(bc,0,0,w,h);
+  }
+
+  tctx.drawImage(srcCanvas,0,0);        // original art on top (crisp edge preserved)
+}
+
+// Largest image (in megapixels) we'll process at full resolution. Above this,
+// we scale down to stay under mobile Safari's per-tab memory ceiling.
+const MAX_FULLRES_MP = 24;
+function safeScale(){
+  const mp = (srcW*srcH)/1e6;
+  return mp>MAX_FULLRES_MP ? Math.sqrt(MAX_FULLRES_MP/mp) : 1;
+}
+let cappedWarned=false;
+function render(){
+  if(!srcCanvas) return;
+  const scale=safeScale();               // full-res unless the image is enormous
+  if(scale<1 && !cappedWarned){
+    cappedWarned=true;
+    busy.textContent='large image — preview slightly reduced';
+    setTimeout(()=>{ busy.textContent='working…'; },2600);
+  }
+  busy.classList.add('on');
+  compose(view, scale);
+  busy.classList.remove('on');
+  applyZoom();
+}
+
+/* ---------- zoom ---------- */
+let panX=0, panY=0;
+function computeFit(){
+  const maxW=stage.clientWidth-48, maxH=stage.clientHeight-48;
+  fitZoom=Math.min(maxW/srcW, maxH/srcH, 1);
+}
+function applyZoom(){
+  computeFit();
+  const z = zoom===0 ? fitZoom : zoom;
+  view.style.width=(srcW*z)+'px'; view.style.height=(srcH*z)+'px';
+  view.style.transform=`translate(${panX}px, ${panY}px)`;
+  $('#zLevel').textContent = zoom===0 ? 'Fit' : Math.round(z*100)+'%';
+}
+function setZoom(z){ const wasFit=zoom===0; zoom=Math.max(0.05,Math.min(8,z)); if(wasFit){ panX=0; panY=0; } applyZoom(); }
+$('#zoomIn').addEventListener('click',()=>setZoom((zoom===0?fitZoom:zoom)*1.25));
+$('#zoomOut').addEventListener('click',()=>setZoom((zoom===0?fitZoom:zoom)/1.25));
+$('#zoomFit').addEventListener('click',()=>{ zoom=0; panX=0; panY=0; applyZoom(); });
+stage.addEventListener('wheel',e=>{ if(!srcCanvas) return; e.preventDefault(); setZoom((zoom===0?fitZoom:zoom)*(e.deltaY<0?1.1:0.9)); },{passive:false});
+
+/* ---------- pan ---------- *
+ * Middle-mouse drag pans (left button is reserved for future primitive
+ * placement). On touch, a single-finger drag pans while zoomed in.        */
+let panning=false, panStartX=0, panStartY=0, panOrigX=0, panOrigY=0;
+stage.addEventListener('pointerdown',e=>{
+  if(!srcCanvas) return;
+  const isMiddle = e.pointerType==='mouse' && e.button===1;
+  const isTouchPan = e.pointerType!=='mouse'; // single-finger touch
+  if(isMiddle || isTouchPan){
+    if(e.pointerType==='mouse') e.preventDefault(); // stop autoscroll cursor
+    panning=true; panStartX=e.clientX; panStartY=e.clientY; panOrigX=panX; panOrigY=panY;
+    stage.setPointerCapture(e.pointerId); stage.style.cursor='grabbing';
+  }
+});
+stage.addEventListener('pointermove',e=>{
+  if(!panning) return;
+  panX=panOrigX+(e.clientX-panStartX); panY=panOrigY+(e.clientY-panStartY);
+  view.style.transform=`translate(${panX}px, ${panY}px)`;
+});
+function endPan(e){ if(panning){ panning=false; stage.style.cursor=''; try{stage.releasePointerCapture(e.pointerId);}catch(_){} } }
+stage.addEventListener('pointerup',endPan);
+stage.addEventListener('pointercancel',endPan);
+// middle-click on some browsers opens autoscroll; suppress it over the stage
+stage.addEventListener('auxclick',e=>{ if(e.button===1) e.preventDefault(); });
+stage.addEventListener('mousedown',e=>{ if(e.button===1) e.preventDefault(); });
+
+// pinch-zoom (two fingers) — takes over from single-finger pan
+let pinchDist=0;
+stage.addEventListener('touchmove',e=>{
+  if(e.touches.length===2){ e.preventDefault(); panning=false;
+    const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
+    const d=Math.hypot(dx,dy);
+    if(pinchDist) setZoom((zoom===0?fitZoom:zoom)*(d/pinchDist)); pinchDist=d;
+  }
+},{passive:false});
+stage.addEventListener('touchend',()=>pinchDist=0);
+window.addEventListener('resize',()=>{ if(srcCanvas) applyZoom(); });
+
+/* ---------- controls ---------- */
+function bindRange(id,key,fmt){ const el=$('#'+id),out=$('#'+id+'Val'); el.addEventListener('input',()=>{ state[key]=+el.value; out.textContent=fmt(el.value); scheduleRender(); }); }
+bindRange('thick','thickness',v=>v+' px');
+bindRange('round','round',v=>v+'%');
+bindRange('smooth','smooth',v=>v+'%');
+bindRange('bleedDark','bleedDark',v=>v+'%');
+
+// Bleed slider label reflects the current unit.
+function bleedLabel(){ return state.bleedUnit==='mm' ? state.bleed.toFixed(1)+' mm' : state.bleed+' px'; }
+$('#bleed').addEventListener('input',()=>{ state.bleed=+$('#bleed').value; $('#bleedVal').textContent=bleedLabel(); scheduleRender(); });
+$('#dpi').addEventListener('input',()=>{ state.dpi=+$('#dpi').value; $('#dpiVal').textContent=state.dpi+' DPI'; if(state.bleedUnit==='mm') scheduleRender(); });
+
+function setUnit(unit){
+  state.bleedUnit=unit;
+  $('#unitPx').setAttribute('aria-pressed', unit==='px');
+  $('#unitMm').setAttribute('aria-pressed', unit==='mm');
+  $('#dpiRow').hidden = unit!=='mm';
+  $('#dpi').hidden = unit!=='mm';
+  const b=$('#bleed');
+  if(unit==='mm'){ b.min=0; b.max=15; b.step=0.5; if(state.bleed>15) state.bleed=3; b.value=state.bleed; }
+  else { b.min=0; b.max=120; b.step=1; b.value=Math.round(state.bleed); state.bleed=+b.value; }
+  $('#bleedVal').textContent=bleedLabel();
+  scheduleRender();
+}
+$('#unitPx').addEventListener('click',()=>setUnit('px'));
+$('#unitMm').addEventListener('click',()=>setUnit('mm'));
+
+$('#swatches').addEventListener('click',e=>{ const b=e.target.closest('.swatch'); if(!b) return;
+  document.querySelectorAll('.swatch').forEach(s=>s.setAttribute('aria-pressed','false')); b.setAttribute('aria-pressed','true');
+  state.color=b.dataset.c; $('#custom').value=b.dataset.c; state.fillType='color'; setFillButtons(); scheduleRender(); });
+$('#custom').addEventListener('input',e=>{ state.color=e.target.value; state.fillType='color'; setFillButtons();
+  document.querySelectorAll('.swatch').forEach(s=>s.setAttribute('aria-pressed','false')); scheduleRender(); });
+function setFillButtons(){ $('#fillColor').setAttribute('aria-pressed',state.fillType==='color'); $('#fillImage').setAttribute('aria-pressed',state.fillType==='image'); $('#pickBg').hidden=state.fillType!=='image'; }
+$('#fillColor').addEventListener('click',()=>{ state.fillType='color'; setFillButtons(); scheduleRender(); });
+$('#fillImage').addEventListener('click',()=>{ state.fillType='image'; setFillButtons(); if(!state.bgImage) $('#bgfile').click(); scheduleRender(); });
+$('#pickBg').addEventListener('click',()=>$('#bgfile').click());
+$('#bgfile').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f) return; const img=new Image(); img.onload=()=>{ state.bgImage=img; state.fillType='image'; setFillButtons(); scheduleRender(); }; img.src=URL.createObjectURL(f); });
+$('#holes').addEventListener('change',e=>{ state.fillHoles=e.target.checked; scheduleRender(); });
+
+$('#save').addEventListener('click',()=>{
+  if(!srcCanvas) return;
+  busy.textContent='rendering full size…'; busy.classList.add('on');
+  // let the browser paint the busy label before the heavy work
+  setTimeout(()=>{
+    const full=document.createElement('canvas');
+    compose(full, safeScale());       // full-resolution (capped only if enormous)
+    full.toBlob(b=>{
+      const a=document.createElement('a'); a.href=URL.createObjectURL(b);
+      a.download='sticker.png'; a.click();
+      busy.classList.remove('on'); busy.textContent='working…';
+    },'image/png');
+  },30);
+});
+$('#reset').addEventListener('click',()=>{ srcCanvas=null; view.hidden=true; panel.hidden=true; $('#zoom').hidden=true; empty.hidden=false; $('#save').disabled=true; fileInput.value=''; });
+</script>
+</body>
+</html>
